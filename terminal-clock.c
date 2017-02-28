@@ -1,10 +1,14 @@
+#define COLUMNS 6
+#define ROWS 5
+#define BLOCK_LETTERS 1
+#define DATE_LETTERS 2
+#define COLOR_SIZE 8
+
 #include <stdlib.h>
 #include <ncurses.h>
 #include <unistd.h>
 #include <time.h>
-
-#define COLUMNS 6
-#define ROWS 5
+#include <string.h>
 
 const int numbers[11][ROWS][COLUMNS] = {
 		{
@@ -87,6 +91,7 @@ const int numbers[11][ROWS][COLUMNS] = {
         }
 
 	};
+const char* colors[] = {"black","red","green","yellow","blue","magenta","cyan","white"};
 
 void update();
 void printNumber(WINDOW* ,const int array[ROWS][COLUMNS]);
@@ -95,19 +100,21 @@ WINDOW *create_newwin(int height, int width, int starty, int startx);
 void initWindows();
 void initColors();
 void clearWindows();
+void printDate(int, int, int);
+void printUsage();
+void printInvalidArgument(char*);
+void processArgs(int argc, char *argv[]);
+void setColor(char *);
 
-WINDOW* hourLeft;
-WINDOW* hourRight;
-WINDOW* minutesLeft;
-WINDOW* minutesRight;
-WINDOW* secondsLeft;
-WINDOW* secondsRight;
-WINDOW* commaOne;
-WINDOW* commaTwo;
+//window definitions
+WINDOW* hourLeft,*hourRight,*minutesLeft,*minutesRight,*secondsLeft,*secondsRight,*commaOne,*commaTwo,*date;
 
-int color = 8;
+//range for colors are 0 - 7
+int color = 7;
 
-int main(int argc, char const *argv[]){
+int main(int argc, char *argv[]){
+	processArgs(argc, argv);
+
 	initscr();
  	noecho();
  	curs_set(FALSE);
@@ -131,6 +138,46 @@ int main(int argc, char const *argv[]){
 	return 0;
 }
 
+void setColor(char* c){
+	int idx = -1;
+	int tmp_clr = -1;
+	for(idx = 0; idx < COLOR_SIZE; idx++){
+		if(strcmp(c, colors[idx]) == 0){
+			tmp_clr = idx;
+		}
+	}
+
+	if(tmp_clr == -1){
+		printf("'%s' : This is not a valid color, Please enter one of these colours: black, red, green, yellow, blue, magenta, cyan, white\n", c);
+		exit(EXIT_FAILURE);
+	}
+
+	color = tmp_clr;
+}
+
+void processArgs(int argc, char *argv[]){
+    int opt;
+
+    while ((opt = getopt(argc, argv, "hC:"))!= -1) {
+        switch (opt) {
+            case 'C':
+                setColor(optarg);
+                break;
+
+            case 'h':
+                printUsage();
+				exit(EXIT_SUCCESS);
+                break;
+
+			default:
+				printUsage();
+				exit(EXIT_FAILURE);
+				break;
+        }
+    }
+}
+
+
 void initWindows(){
 	hourLeft     = create_newwin(ROWS, COLUMNS, 1, 1);
 	hourRight    = create_newwin(ROWS, COLUMNS, 1, 8);
@@ -140,17 +187,18 @@ void initWindows(){
 	commaTwo     = create_newwin(ROWS, COLUMNS, 1, 33);
 	secondsLeft  = create_newwin(ROWS, COLUMNS, 1, 39);
 	secondsRight = create_newwin(ROWS, COLUMNS, 1, 46);
+	date 		 = create_newwin(1, 10, ROWS + 2,  22);
+}
+
+void printDate(int y, int m, int d){
+	wattron(date,COLOR_PAIR(DATE_LETTERS));
+	wprintw(date,"%d-%d%d-%d%d", 1900+y, m/10, m%10, d/10, d%10);
+	wattroff(date,COLOR_PAIR(DATE_LETTERS));
 }
 
 void initColors(){
-	init_pair(1, COLOR_BLACK, COLOR_BLACK);
-	init_pair(2, COLOR_BLACK, COLOR_RED);
-	init_pair(3, COLOR_BLACK, COLOR_GREEN);
-	init_pair(4, COLOR_BLACK, COLOR_YELLOW);
-	init_pair(5, COLOR_BLACK, COLOR_BLUE);
-	init_pair(6, COLOR_BLACK, COLOR_MAGENTA);
-	init_pair(7, COLOR_BLACK, COLOR_CYAN);
-	init_pair(8, COLOR_BLACK, COLOR_WHITE);
+	init_pair(BLOCK_LETTERS, COLOR_BLACK, color);
+	init_pair(DATE_LETTERS, color, COLOR_BLACK);
 }
 
 void refreshWindows() {
@@ -160,9 +208,11 @@ void refreshWindows() {
 	wrefresh(minutesRight);
 	wrefresh(secondsLeft);
 	wrefresh(secondsRight);
+	wrefresh(date);
 }
 
 void clearWindows() {
+	wclear(date);
     wclear(hourLeft);
 	wclear(hourRight);
 	wclear(minutesLeft);
@@ -176,14 +226,23 @@ void printNumber(WINDOW* win, const int array[ROWS][COLUMNS]){
 	for(i = 0; i < ROWS; i++){
 		for(j = 0; j < COLUMNS; j++){
 			if(array[i][j] == 1){
-                wattron(win,COLOR_PAIR(color));
+                wattron(win,COLOR_PAIR(BLOCK_LETTERS));
 				wprintw(win," ");
-                wattroff(win,COLOR_PAIR(color));
+                wattroff(win,COLOR_PAIR(BLOCK_LETTERS));
 			}else{
 				wprintw(win," ");
 			}
 		}
 	}
+}
+
+void printUsage(){
+	printf("usage : clock -C <black|red|green|yellow|blue|magenta|cyan|white]\n");
+	exit(1);
+}
+
+void printInvalidArgument(char* arg){
+
 }
 
 void update(){
@@ -200,6 +259,8 @@ void update(){
 	printNumber(minutesRight, numbers[timeinfo->tm_min % 10]);
 	printNumber(secondsLeft, numbers[timeinfo->tm_sec / 10]);
 	printNumber(secondsRight, numbers[timeinfo->tm_sec % 10]);
+
+	printDate(timeinfo->tm_year, timeinfo->tm_mon + 1, timeinfo->tm_mday);
 
 	refreshWindows();
 }
